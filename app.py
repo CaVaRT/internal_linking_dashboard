@@ -122,7 +122,6 @@ with tab1:
     
     # Anchor Variability Chart
     st.subheader("Anchor Variability Distribution")
-    
     # Order for the groups
     group_order = ['1-3', '4-5', '6-8', '8+']
     anchor_counts = filtered_df['anchor_variability'].value_counts()
@@ -156,6 +155,7 @@ with tab1:
             
             with col1:
                 st.subheader("URL Component 1 Analysis")
+                st.info('Example: https://www.surveymonkey.com/templates/')
                 component1_counts = selected_data['url_component_1'].value_counts()
                 total = len(selected_data)
                 component1_pct = (component1_counts / total * 100).round(2)
@@ -171,6 +171,7 @@ with tab1:
             
             with col2:
                 st.subheader("URL Component 2 Analysis")
+                st.info('Example: https://www.surveymonkey.com/templates/online-music-streaming-survey-template/')
                 component2_data = selected_data[selected_data['url_component_2'].notna()]
                 
                 if len(component2_data) > 0:
@@ -202,25 +203,38 @@ with tab2:
         df_search = df_expanded.copy()
         st.info("Searching across all subdomains")
     
+    # Search term input
     search_term = st.text_input("Search in target URL (contains)", "")
     
+    # Min unique-anchor filter (leave empty to disable)
+    min_unique_raw = st.text_input("Minimum unique anchor text count (leave empty to show all)", value="")
+    min_unique = None
+    if min_unique_raw is not None and str(min_unique_raw).strip() != "":
+        try:
+            min_unique = int(min_unique_raw)
+            st.info(f"Filtering URLs with unique_anchor_text_count > {min_unique}")
+        except ValueError:
+            st.warning("Minimum unique anchor text must be an integer. Ignoring this filter.")
+            min_unique = None
+
+    # Apply search filter
+    df_filtered = df_search
     if search_term:
-        # Filter expanded dataframe by search term
-        search_results = df_search[
-            df_search['target_url'].str.contains(search_term, case=False, na=False)
-        ].copy()
-        
-        if len(search_results) > 0:
-            st.success(f"Found {len(search_results)} results")
-            st.dataframe(
-                search_results[[col for col in ['target_url', 'anchor_text', 'found_at'] if col in search_results.columns]],
-                width='stretch',
-                hide_index=True
-            )
-        else:
-            st.warning("No results found")
+        df_filtered = df_filtered[df_filtered['target_url'].str.contains(search_term, case=False, na=False)].copy()
+
+    # Apply min-unique filter if provided
+    if min_unique is not None and 'unique_anchor_text_count' in df_filtered.columns:
+        df_filtered = df_filtered[pd.to_numeric(df_filtered['unique_anchor_text_count'], errors='coerce').fillna(0) > min_unique].copy()
+
+    if len(df_filtered) > 0:
+        st.success(f"Found {len(df_filtered)} results")
+        st.dataframe(
+            df_filtered[[col for col in ['target_url', 'anchor_text', 'found_at', 'unique_anchor_text_count'] if col in df_filtered.columns]],
+            width='stretch',
+            hide_index=True
+        )
     else:
-        st.info("Enter a search term to find matching URLs")
+        st.warning("No results found" if (search_term or min_unique is not None) else "Enter a search term or set a filter to find matching URLs")
 
 with tab3:
     st.header("Missing Anchor Text Report")
