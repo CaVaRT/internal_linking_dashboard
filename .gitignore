@@ -1,0 +1,7 @@
+# local secrets
+.env
+.env.*
+secrets.toml
+
+# notebooks
+.ipynb_checkpoints/
