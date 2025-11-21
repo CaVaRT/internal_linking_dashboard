@@ -71,36 +71,35 @@ def prepare_data(df: pd.DataFrame) -> pd.DataFrame:
 
 @st.cache_data
 def expand_anchor_texts(df: pd.DataFrame) -> pd.DataFrame:
-    """Expand anchor texts into separate rows for search functionality"""
+    """Expand anchor texts into separate rows for search functionality while keeping all original columns."""
     expanded_rows = []
 
-    for idx, row in df.iterrows():
-        target_url = row['target_url']
-        anchor_texts = str(row['anchor_texts'])
-        found_at = str(row['found_at'])
+    for _, row in df.iterrows():
+        anchors = [a.strip() for a in str(row.get('anchor_texts', '')).split('|') if a.strip()]
+        found_ats = [f.strip() for f in str(row.get('found_at', '')).split(';') if f.strip()]
 
-        # Split anchor texts and found_at by semicolon
-        anchors = [a.strip() for a in anchor_texts.split(';') if a.strip()]
-        found_ats = [f.strip() for f in found_at.split(';') if f.strip()]
+        # If no anchors, keep a single row with empty anchor_text
+        if not anchors:
+            new_row = row.to_dict()
+            new_row['anchor_text'] = ''
+            new_row['found_at'] = new_row.get('found_at', '')
+            expanded_rows.append(new_row)
+            continue
 
-        # Match anchors with found_at URLs
         for i, anchor in enumerate(anchors):
-            found_url = found_ats[i] if i < len(found_ats) else ''
-            expanded_rows.append({
-                'target_url': target_url,
-                'anchor_text': anchor,
-                'found_at': found_url
-            })
+            new_row = row.to_dict()
+            new_row['anchor_text'] = anchor
+            new_row['found_at'] = found_ats[i] if i < len(found_ats) else ''
+            expanded_rows.append(new_row)
 
     return pd.DataFrame(expanded_rows)
-
-
 # Title
 st.title("🔗 Internal link Analysis Dashboard")
 
 df = load_data()
 df = prepare_data(df)
 df_expanded = expand_anchor_texts(df)
+
 
 # Sidebar filters
 st.sidebar.header("Filters")
@@ -195,18 +194,26 @@ with tab1:
 with tab2:
     st.header("Search URLs")
     
+    # Apply subdomain filter to expanded dataframe for search
+    if selected_subdomain != 'ALL':
+        df_search = df_expanded[df_expanded.get('subdomain', '') == selected_subdomain].copy()
+        st.info(f"Searching within subdomain: {selected_subdomain}")
+    else:
+        df_search = df_expanded.copy()
+        st.info("Searching across all subdomains")
+    
     search_term = st.text_input("Search in target URL (contains)", "")
     
     if search_term:
-        # Filter expanded dataframe
-        search_results = df_expanded[
-            df_expanded['target_url'].str.contains(search_term, case=False, na=False)
+        # Filter expanded dataframe by search term
+        search_results = df_search[
+            df_search['target_url'].str.contains(search_term, case=False, na=False)
         ].copy()
         
         if len(search_results) > 0:
             st.success(f"Found {len(search_results)} results")
             st.dataframe(
-                search_results[['target_url', 'anchor_text', 'found_at']],
+                search_results[[col for col in ['target_url', 'anchor_text', 'found_at'] if col in search_results.columns]],
                 width='stretch',
                 hide_index=True
             )
@@ -217,11 +224,10 @@ with tab2:
 
 with tab3:
     st.header("Missing Anchor Text Report")
-    st.write("Shows URLs where anchor texts contain '| (' pattern")
     
     # Filter for missing anchor texts
-    missing_anchor_df = df[
-        df['anchor_texts'].astype(str).str.contains(r'\|\s*\(', regex=True, na=False)
+    missing_anchor_df = filtered_df[
+        filtered_df['anchor_texts'].astype(str).str.contains(r'\|\s*\(', regex=True, na=False)
     ].copy()
     
     if len(missing_anchor_df) > 0:
