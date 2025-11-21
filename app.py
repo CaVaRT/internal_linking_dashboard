@@ -68,38 +68,40 @@ def prepare_data(df: pd.DataFrame) -> pd.DataFrame:
 
     return df
 
+### PROBABLY DELETE
+# @st.cache_data
+# def expand_anchor_texts(df: pd.DataFrame) -> pd.DataFrame:
+#     """Expand anchor texts into separate rows for search functionality while keeping all original columns."""
+#     expanded_rows = []
 
-@st.cache_data
-def expand_anchor_texts(df: pd.DataFrame) -> pd.DataFrame:
-    """Expand anchor texts into separate rows for search functionality while keeping all original columns."""
-    expanded_rows = []
+#     for _, row in df.iterrows():
+#         anchors = [a.strip() for a in str(row.get('anchor_texts', '')).split('|') if a.strip()]
+#         found_ats = [f.strip() for f in str(row.get('found_at', '')).split(';') if f.strip()]
 
-    for _, row in df.iterrows():
-        anchors = [a.strip() for a in str(row.get('anchor_texts', '')).split('|') if a.strip()]
-        found_ats = [f.strip() for f in str(row.get('found_at', '')).split(';') if f.strip()]
+#         # If no anchors, keep a single row with empty anchor_text
+#         if not anchors:
+#             new_row = row.to_dict()
+#             new_row['anchor_text'] = ''
+#             new_row['found_at'] = new_row.get('found_at', '')
+#             expanded_rows.append(new_row)
+#             continue
 
-        # If no anchors, keep a single row with empty anchor_text
-        if not anchors:
-            new_row = row.to_dict()
-            new_row['anchor_text'] = ''
-            new_row['found_at'] = new_row.get('found_at', '')
-            expanded_rows.append(new_row)
-            continue
+#         for i, anchor in enumerate(anchors):
+#             new_row = row.to_dict()
+#             new_row['anchor_text'] = anchor
+#             new_row['found_at'] = found_ats[i] if i < len(found_ats) else ''
+#             expanded_rows.append(new_row)
 
-        for i, anchor in enumerate(anchors):
-            new_row = row.to_dict()
-            new_row['anchor_text'] = anchor
-            new_row['found_at'] = found_ats[i] if i < len(found_ats) else ''
-            expanded_rows.append(new_row)
+#     return pd.DataFrame(expanded_rows)
+### PROBABLY DETEL FINISH
 
-    return pd.DataFrame(expanded_rows)
+
+
 # Title
 st.title("🔗 Internal link Analysis Dashboard")
 
 df = load_data()
 df = prepare_data(df)
-df_expanded = expand_anchor_texts(df)
-
 
 # Sidebar filters
 st.sidebar.header("Filters")
@@ -123,6 +125,7 @@ with tab1:
     # Anchor Variability Chart
     st.subheader("Anchor Variability Distribution")
     # Order for the groups
+    filtered_df = filtered_df.drop_duplicates(subset='target_url')
     group_order = ['1-3', '4-5', '6-8', '8+']
     anchor_counts = filtered_df['anchor_variability'].value_counts()
     anchor_counts = anchor_counts.reindex(group_order, fill_value=0)
@@ -197,10 +200,10 @@ with tab2:
     
     # Apply subdomain filter to expanded dataframe for search
     if selected_subdomain != 'ALL':
-        df_search = df_expanded[df_expanded.get('subdomain', '') == selected_subdomain].copy()
+        df_search = df[df.get('subdomain', '') == selected_subdomain].copy()
         st.info(f"Searching within subdomain: {selected_subdomain}")
     else:
-        df_search = df_expanded.copy()
+        df_search = df.copy()
         st.info("Searching across all subdomains")
     
     # Search term input
@@ -238,19 +241,25 @@ with tab2:
 
 with tab3:
     st.header("Missing Anchor Text Report")
+
     
     # Filter for missing anchor texts
-    missing_anchor_df = filtered_df[
-        filtered_df['anchor_texts'].astype(str).str.contains(r'\|\s*\(', regex=True, na=False)
-    ].copy()
+    missing_anchor_df = df[
+    df['anchor_text'].isna() | (df['anchor_text'].astype(str).str.strip() == '')
+].copy()
     
-    if len(missing_anchor_df) > 0:
-        st.warning(f"Found {len(missing_anchor_df)} URLs with missing anchor text patterns")
+    # Apply subdomain filter to expanded dataframe for search
+    if selected_subdomain != 'ALL':
+        filtered_missing_anchor_df = missing_anchor_df[missing_anchor_df.get('subdomain', '') == selected_subdomain].copy()
+        st.info(f"Searching within subdomain: {selected_subdomain}")
+    else:
+        filtered_missing_anchor_df = missing_anchor_df.copy()
+        st.info("Searching across all subdomains")
         
-        display_df = missing_anchor_df[[
-            'target_url', 'anchor_texts', 'unique_anchor_text_count', 
-            'total_inlinks', 'found_at'
-        ]].copy()
+    if len(filtered_missing_anchor_df) > 0:
+        st.warning(f"Found {len(filtered_missing_anchor_df)} URLs with missing anchor text patterns")
+        
+        display_df = filtered_missing_anchor_df[['target_url', 'found_at', 'anchor_text']].copy()
         
         st.dataframe(display_df, width='stretch', hide_index=True)
         
