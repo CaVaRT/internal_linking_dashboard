@@ -231,14 +231,39 @@ with tab2:
 
     if len(df_filtered) > 0:
         st.success(f"Found {len(df_filtered)} results")
+        
+        # Calculate anchor text frequency for each target_url + anchor_text combination
+        df_filtered['anchor_count'] = df_filtered.groupby(['target_url', 'anchor_text'])['anchor_text'].transform('count')
+        
+        # Append count to anchor text, handling empty values
+        def format_anchor_with_count(row):
+            anchor = row['anchor_text']
+            count = row['anchor_count']
+            
+            # Handle NaN count
+            if pd.isna(count):
+                count = 1
+            else:
+                count = int(count)
+            
+            if pd.isna(anchor) or str(anchor).strip() == '':
+                return f"N/A ({count})"
+            else:
+                return f"{anchor} ({count})"
+        
+        df_filtered['anchor_text'] = df_filtered.apply(format_anchor_with_count, axis=1)
+        
+        # Display columns (excluding anchor_count as it's now embedded)
+        display_cols = [col for col in ['target_url', 'anchor_text', 'found_at', 'unique_anchor_text_count'] if col in df_filtered.columns]
+        
         st.dataframe(
-            df_filtered[[col for col in ['target_url', 'anchor_text', 'found_at', 'unique_anchor_text_count'] if col in df_filtered.columns]],
+            df_filtered[display_cols],
             width='stretch',
             hide_index=True
         )
     else:
         st.warning("No results found" if (search_term or min_unique is not None) else "Enter a search term or set a filter to find matching URLs")
-
+        
 with tab3:
     st.header("Missing Anchor Text Report")
 
