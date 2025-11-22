@@ -6,7 +6,7 @@ import plotly.graph_objects as go
 from urllib.parse import urlparse
 import re
 
-st.set_page_config(page_title="Internal link Analysis Dashboard", layout="wide")
+st.set_page_config(page_title="Anchor Text Analysis Tool", layout="wide")
 
 
 def load_data():
@@ -98,7 +98,7 @@ def prepare_data(df: pd.DataFrame) -> pd.DataFrame:
 
 
 # Title
-st.title("🔗 Internal link Analysis Dashboard")
+st.title("🔗 Anchor Text Analysis Tool")
 
 df = load_data()
 df = prepare_data(df)
